@@ -1,0 +1,8 @@
+[0:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.38,adelay=200|200[c0];
+[1:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.25,adelay=2600|2600[c1];
+[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.33,adelay=5280|5280[c2];
+[3:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.2,adelay=9830|9830[c3];
+[4:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.25,adelay=11080|11080[c4];
+[5:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.25,adelay=11630|11630[c5];
+[6:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.25,adelay=12180|12180[c6];
+[c0][c1][c2][c3][c4][c5][c6]amix=inputs=7:normalize=0:dropout_transition=0,apad=whole_dur=19.99,atrim=duration=19.99[out]
