@@ -8,6 +8,7 @@
 import fs from 'fs'; import path from 'path'; import http from 'http'; import { createHash } from 'crypto'; import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { SETS } from './engine/setdata.mjs';
+import { STORY } from './engine/anim.js';
 import { gains as spatialGains, sourceAt as spatialSource, ffmpegPan } from './tools/spatial.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -312,6 +313,10 @@ async function build(ep, quiet) {
             ids.forEach((id, i) => { const a = (i / ids.length) * Math.PI * 2 + R() * .5, rr = rad * (.6 + R() * .5); const p = [to[0] + Math.cos(a) * rr, 0, to[2] + Math.sin(a) * rr * .6]; addEv(id, t + (arg.stagger ?? .15) * i + R() * .2, 'walk', { to: p, speed: arg.speed || 1.6, cadence: arg.cadence || 5, rot: arg.face ? Math.atan2(to[0] - p[0], to[2] - p[2]) : undefined }); });
           } else if (c === 'cheer') { for (const id of crowdIds) if (sc.actors[id]) { addEv(id, t + R() * .3, 'pose', arg || 'cheer'); addEv(id, t + R() * .3, 'expr', 'joy'); } }
           else if (['pose', 'expr', 'look'].includes(c)) { for (const id of crowdIds) if (sc.actors[id]) c === 'look' ? (lookEv[id] ||= []).push({ t: r2(t + R() * .2), target: arg }) : addEv(id, t + R() * .25, c, arg); }
+          else if (c === 'story') { // every listener reacts, each with its own lag
+            const beat = storyBeat(arg, si);
+            for (const id of crowdIds) if (sc.actors[id]) { addEv(id, t + R() * .3, 'pose', beat.pose); if (beat.expr) addEv(id, t + R() * .35, 'expr', beat.expr); }
+          }
           else throw new Error('unknown crowd cmd ' + c);
           continue;
         }
@@ -322,6 +327,17 @@ async function build(ep, quiet) {
         else if (c === 'walk') addEv(tg, t, 'walk', typeof arg === 'string' || Array.isArray(arg) ? { to: arg } : arg);
         else if (c === 'enter') { addEv(tg, t, 'show'); addEv(tg, t, 'walk', arg); }
         else if (c === 'exit') { addEv(tg, t, 'walk', arg); }
+        else if (c === 'story') {
+          const o = typeof arg === 'object' && arg ? arg : {}, beat = storyBeat(arg, si);
+          if (beat.pose) addEv(tg, t, 'pose', (o.pose || beat.pose) + (o.sit ? '@sit' : ''));
+          if (o.expr || beat.expr) addEv(tg, t, 'expr', o.expr || beat.expr);
+          if (o.turn) addEv(tg, t, 'turn', o.turn);
+          const look = o.look !== undefined ? o.look : beat.look;
+          if (look) (lookEv[tg] ||= []).push({ t: r2(t), target: look });
+          if (beat.punch) C.punches.push({ t: r2(t), amt: o.punch ?? beat.punch });
+          if (beat.shake) C.shakes.push({ t: r2(t), amt: o.shake ?? beat.shake, dur: o.dur ?? .45 });
+          if (beat.sfx && o.sfx !== false) sfx(o.sfx || beat.sfx, t, { vol: o.vol ?? .3 });
+        }
         else addEv(tg, t, c, arg);
       }
       timeline.push({ si, bi, start: r2(start), end: r2(end), say: B.say ? B.say[0] + ': ' + B.say[1] : '' });
@@ -392,6 +408,13 @@ async function build(ep, quiet) {
   if (!quiet) { for (const b of timeline) log(`S${b.si + 1}.${b.bi + 1}  ${b.start.toFixed(2).padStart(6)}–${b.end.toFixed(2).padStart(6)}  ${b.say}`); log(`duration ${C.duration}s, ${C.scenes.length} scenes, ${C.scenes.reduce((a, s) => a + s.shots.length, 0)} shots`); }
   return C;
 }
+// 'story' -> named storytime beat (pose + face + camera + sfx), see STORY in engine/anim.js
+function storyBeat(arg, si) {
+  const name = typeof arg === 'string' ? arg : arg?.beat, B = STORY[name];
+  if (!B) throw new Error(`scene ${si + 1}: unknown story beat "${name}" — try one of: ${Object.keys(STORY).join(', ')}`);
+  return B;
+}
+
 function normCam(set, cam) {
   if (typeof cam === 'string') {
     if (SETS[set].cams[cam]) return { type: 'set', name: cam };

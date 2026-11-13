@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import puppeteer from 'puppeteer';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-for (const ep of ['test_pult', 'demo_zone', 'demo_fx', 'demo_media', 'demo_toy']) {
+for (const ep of ['test_pult', 'demo_zone', 'demo_fx', 'demo_media', 'demo_toy', 'demo_story']) {
   execFileSync(process.execPath, ['studio.js', 'build', ep], { cwd: root, stdio: 'pipe' });
   console.log('build OK:', ep);
 }

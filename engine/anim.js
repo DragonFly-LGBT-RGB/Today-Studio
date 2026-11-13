@@ -3,6 +3,8 @@
 // Pose fields: aL,aR,lL,lR = [rx,ry,rz] limb rotations; hd = [pitch,yaw,roll]; y = root lift; lean = root pitch; talk = allow talk gestures.
 const S = Math.sin, PI = Math.PI;
 const sit = { lL: [-PI / 2, 0, .04], lR: [-PI / 2, 0, -.04], y: .45 };
+const ck = (t, a, d) => Math.max(0, Math.min(1, (t - a) / Math.max(.001, d))); // ramp 0->1 from a to a+d
+const eo = k => 1 - Math.pow(1 - k, 3);                                        // ease-out cubic
 
 export const CLIPS = {
   // Cartoony, deliberately exaggerated gestures for the optional toy style.
@@ -45,6 +47,59 @@ export const CLIPS = {
   cry: (t, T) => ({ aL: [-2.3, 0, -.45], aR: [-2.3, 0, .45], hd: [.25, 0, S(T * 9) * .05], y: Math.abs(S(T * 8)) * .04 }),
   facepalm: () => ({ aL: [0, 0, .06], aR: [-2.5, 0, .55], hd: [.25, 0, 0] }),
   think: (t, T) => ({ aL: [-1.0, 0, -.5], aR: [-2.2, 0, .5], hd: [0, 0, .12] }),
+  // ---- storytime: a narrator telling a story straight into the camera ----
+  // Any of these also works seated as 'stTell@sit' etc. (see clipPose).
+  // Baseline "so, here's what happened" loop; the leading hand swaps every ~2.7 s.
+  stTell: (t, T) => {
+    const w = S(T * 1.15) * .5 + .5, k = .5 + .5 * S(T * 2.3), up = -.85 - k * .5;
+    return { aL: [up * (.45 + .55 * w), 0, .26 + k * .16 * w], aR: [up * (1 - .55 * w), 0, -.26 - k * .16 * (1 - w)],
+      hd: [.03 + k * .05, (w - .5) * .22, S(T * 1.7) * .07], lean: .02 + k * .04, talk: true };
+  },
+  // Emphasis chop: the palm snaps down on each stressed word. Fire it from a 'w:' beat reference.
+  stChop: (t, T) => { const k = Math.pow(Math.max(0, S(T * 5.1)), 4); return { aL: [-.4, 0, .22], aR: [-1.7 + k * .62, -.18, -.28 - k * .22], hd: [.04 + k * .09, -.08, .03], lean: .03 + k * .06, talk: true }; },
+  // "Picture this": both palms up, framing an imaginary scene in the air.
+  stFrame: (t, T) => { const k = S(T * 1.5) * .5 + .5; return { aL: [-1.3 - k * .12, .3, .68], aR: [-1.3 - k * .12, -.3, -.68], hd: [-.07, 0, .04 * k], lean: -.03, talk: true }; },
+  // Air quotes: the hands curl twice per beat.
+  stQuotes: (t, T) => { const k = Math.abs(S(T * 5.5)); return { aL: [-1.55 - k * .14, .1, .46], aR: [-1.55 - k * .14, -.1, -.46], hd: [-.05, 0, .05], y: k * .03, talk: false }; },
+  // "And then…" — leans in, drops the voice, one hand cups the side of the mouth.
+  stWhisper: (t, T) => { const k = eo(ck(t, 0, .35)); return { aL: [-.15, 0, .2], aR: [-2.0 * k, .18 * k, .34 * k], hd: [.07 * k, .14 * k, -.1 * k], lean: .17 * k, talk: true }; },
+  // Double take: the head whips away, then snaps back and the whole body recoils.
+  stDoubleTake: (t, T) => {
+    const k = eo(ck(t, 0, .17)) - eo(ck(t, .3, .16)), r = t > .3 ? Math.exp(-(t - .3) * 7) : 0;
+    return { aL: [-.3 - k * .45, 0, .28 + k * .22], aR: [-.3 - k * .45, 0, -.28 - k * .22],
+      hd: [.06 + r * .12, k * .95 - r * .06, -k * .18], lean: -.05 * k - r * .12, y: -.06 * k - r * .05, talk: false };
+  },
+  // Slow "no, no, no": head shake with both palms pushed out.
+  stNoNo: (t, T) => ({ aL: [-1.05, 0, .48], aR: [-1.05, 0, -.48], hd: [.03, S(T * 4.2) * .33, S(T * 2.1) * .04], talk: true }),
+  // Slow knowing nod, hands folded low.
+  stNod: (t, T) => ({ aL: [-.7, .1, .3], aR: [-.7, -.1, -.3], hd: [.15 + S(T * 3.1) * .18, 0, S(T * 1.55) * .03], talk: true }),
+  // Contemptuous eye roll; pair with the animated 'roll' expression.
+  stRoll: (t, T) => { const k = eo(ck(t, 0, .4)); return { aL: [-.15, 0, .3], aR: [-.15, 0, -.3], hd: [-.07 * k, .12 * k, .11 * k], lean: -.03 * k, talk: false }; },
+  // Cringe: shoulders hug in and the body shivers, then slowly settles.
+  stCringe: (t, T) => { const d = Math.exp(-Math.max(0, t - .9) * 1.9), k = S(T * 21) * d; return { aL: [-1.25 - d * .1, .22, -.62], aR: [-1.2 - d * .1, -.22, .62], hd: [.13 + k * .05, k * .07, k * .05], lean: -.05 * d, y: k * .04, talk: false }; },
+  // Rage: flailing arms and a stomp on every other beat.
+  stRage: (t, T) => { const k = S(T * 10.5); return { aL: [-1.5 + k * .85, 0, .45 + k * .45], aR: [-1.5 - k * .85, 0, -.45 - k * .45], lL: [-Math.max(0, k) * .5, 0, .06], lR: [-Math.max(0, -k) * .5, 0, -.06], y: Math.abs(k) * .09, hd: [.1 + S(T * 13) * .07, S(T * 3.1) * .12, S(T * 9) * .07], lean: .05, talk: false }; },
+  // Despair: head buried in both hands, rocking.
+  stDespair: (t, T) => ({ aL: [-2.15, .3, -.48], aR: [-2.15, -.3, .48], hd: [.34 + S(T * 1.5) * .04, 0, S(T * 1.1) * .03], lean: .1, talk: false }),
+  // Hype shimmy for good news.
+  stShimmy: (t, T) => { const k = S(T * 9); return { aL: [-.2, 0, .5 + k * .28], aR: [-.2, 0, -.5 - k * .28], y: Math.abs(S(T * 4.5)) * .12, hd: [0, k * .13, k * .09], lean: -.02, talk: true }; },
+  // Gasp: hands fly to the cheeks and the torso recoils, then the shock slowly ebbs.
+  stGasp: (t, T) => {
+    const k = eo(ck(t, 0, .16)) * (1 - .4 * eo(ck(t, 1.1, .9))), r = t > .16 ? Math.exp(-(t - .16) * 4) : 0;
+    return { aL: [-1.95 * k, 0, -.48 * k], aR: [-1.95 * k, 0, .48 * k], hd: [-.13 * k - r * .06, 0, 0], lean: -.1 * k - r * .08, y: -.05 * k, talk: false };
+  },
+  // Wipes the brow — "phew".
+  stWipe: (t, T) => { const k = eo(ck(t, 0, .22)), sw = S(ck(t, .18, .5) * PI); return { aL: [-.2, 0, .15], aR: [-2.35 * k, .2 * k, (.48 - sw * .5) * k], hd: [(-.13 + sw * .26) * k, 0, .06 * k], lean: -.05 * k, talk: false }; },
+  // Leans back with a hand behind the head: "so what do you think happened next?"
+  stLeanBack: (t, T) => ({ aL: [-.18, 0, .16], aR: [-2.4, -.55, -.9], hd: [-.16 + S(T * 1.3) * .04, .12, .06], lean: -.13, talk: true }),
+  // Points at the viewer with a small lunge.
+  stPointCam: (t, T) => { const k = eo(ck(t, 0, .2)); return { aL: [-.08, 0, .12], aR: [-1.62 * k, -.14 * k, -.06 * k], hd: [-.05 * k, 0, 0], lean: .13 * k, y: -.04 * k, talk: false }; },
+  // Counts the points of the story on an open palm.
+  stCount: (t, T) => { const k = Math.max(0, S(T * 5.4)); return { aL: [-1.15, .22, -.3], aR: [-1.5 + k * .28, 0, .24], hd: [.27, -.09, .03], lean: .05, talk: true }; },
+  // Deadpan stare straight down the lens, arms limp. Pair with look 'cam'.
+  stStare: (t, T) => ({ aL: [-.04, 0, .06], aR: [-.04, 0, -.06], hd: [0, 0, S(T * .75) * .02], lean: 0, talk: false }),
+  // Awkward silence: tiny weight shifts and a frozen half-smile.
+  stAwkward: (t, T) => ({ aL: [-.42, 0, .28], aR: [-.42, 0, -.28], hd: [.05, S(T * .68) * .2, .07], lean: S(T * .9) * .03, talk: false }),
   // ---- zombies ----
   zombie: (t, T) => ({ aL: [-1.45 + S(T * 1.7) * .1, 0, -.06], aR: [-1.3 + S(T * 1.4 + 1) * .12, 0, .1], hd: [.15 + S(T * 1.1) * .06, S(T * .7) * .1, .28 + S(T * .9) * .1], lean: .1, talk: false }),
   zombieOne: (t, T) => ({ aL: [-.1 + S(T * 1.3) * .05, 0, .12], aR: [-1.4 + S(T * 1.5 + 1) * .12, 0, .1], hd: [.2, 0, -.3 + S(T * .9) * .08], lean: .12, talk: false }),
@@ -179,6 +234,47 @@ export const EXPR = {
   grim: { eyeOpen: .8, browAng: .5, browY: -.15, mouth: 'flat' },
   scream: { eyeOpen: 1.4, eyeW: 1.15, browAng: -.9, browY: .9, mouth: 'jaw', sweat: true },
   lying: { eyes: 'lid', browAng: -.3, mouth: 'smile', sweat: true },
+  // ---- storytime faces (narrator + listeners reacting) ----
+  deadpan: { eyes: 'lid', mouth: 'flat', browY: -.12 },
+  roll: { eyes: 'lid', mouth: 'flat', browY: .15 },      // animated in runtime.js: eyes slide up and back
+  shifty: { eyeOpen: 1.05, mouth: 'flat', browY: .1 },   // animated in runtime.js: eyes dart side to side
+  cringe: { eyes: 'lid', browAng: .75, mouth: 'wavy', sweat: true },
+  gasp: { eyeOpen: 1.35, eyeW: 1.12, browY: .85, mouth: 'o' },
+  yuck: { eyes: 'lid', browAng: .8, mouth: 'wavy', lookY: .3 },
+  plotting: { eyes: 'lid', browAng: .55, mouth: 'smirk', lookY: -.25 },
+  confused: { browAng: -.55, browRaiseR: .85, eyeW: 1.05, mouth: 'wavy' },
+  awkward: { eyeOpen: .85, mouth: 'smile', browY: .3, sweat: true },
+  pleading: { eyeOpen: 1.25, eyeW: 1.12, browAng: -.9, browY: .55, mouth: 'wavy' },
+  hype: { eyeOpen: 1.2, browY: .6, mouth: 'grin', cheeks: true },
+  oops: { eyeOpen: 1.12, browY: .5, mouth: 'o', sweat: true, blush: true },
+  done: { eyes: 'closed', mouth: 'flat', browAng: .35 },
+};
+
+// Storytime beats: one command in a scenario expands into pose + face + camera + sfx.
+//   ['narr','story','twist']                     standing
+//   ['narr','story',{beat:'intro',sit:true}]     same beat on the sofa ('stTell@sit')
+// Any field can be overridden per call: pose, expr, look, punch, shake, sfx, vol, turn.
+export const STORY = {
+  intro:    { pose: 'stTell',       expr: 'happy',      look: 'cam' },
+  hook:     { pose: 'stPointCam',   expr: 'determined', look: 'cam', punch: .18, sfx: 'whoosh' },
+  picture:  { pose: 'stFrame',      expr: 'plotting',   look: 'cam' },
+  emphasis: { pose: 'stChop',       expr: 'angry',      look: 'cam' },
+  quotes:   { pose: 'stQuotes',     expr: 'smug',       look: 'cam', sfx: 'click' },
+  whisper:  { pose: 'stWhisper',    expr: 'nervous',    look: 'cam' },
+  list:     { pose: 'stCount',      expr: 'busy',       look: 'cam' },
+  reveal:   { pose: 'stGasp',       expr: 'gasp',       look: 'cam', punch: .3, sfx: 'ding' },
+  twist:    { pose: 'stDoubleTake', expr: 'shocked',    look: 'cam', punch: .24, sfx: 'whoosh' },
+  denial:   { pose: 'stNoNo',       expr: 'cringe',     look: 'cam' },
+  agree:    { pose: 'stNod',        expr: 'happy',      look: 'cam' },
+  roll:     { pose: 'stRoll',       expr: 'roll',       look: 'cam' },
+  cringe:   { pose: 'stCringe',     expr: 'cringe',     look: 'cam', sfx: 'creak' },
+  rage:     { pose: 'stRage',       expr: 'scream',     look: 'cam', shake: .18, sfx: 'thud' },
+  despair:  { pose: 'stDespair',    expr: 'cry',        look: 'none' },
+  hype:     { pose: 'stShimmy',     expr: 'hype',       look: 'cam', sfx: 'pop' },
+  phew:     { pose: 'stWipe',       expr: 'tired',      look: 'cam' },
+  so:       { pose: 'stLeanBack',   expr: 'smug',       look: 'cam' },
+  deadpan:  { pose: 'stStare',      expr: 'deadpan',    look: 'cam' },
+  awkward:  { pose: 'stAwkward',    expr: 'awkward',    look: 'cam', sfx: 'tick' },
 };
 
 export function blendPose(a, b, k) {

@@ -199,7 +199,7 @@ function evalActor(a, t) {
   let rotFrom = I.rot || 0, rotTo = rotFrom, rotT0 = -99, rotDur = .3;
   const rotAt = tt => rotFrom + (rotTo - rotFrom) * smooth(clamp((tt - rotT0) / rotDur));
   const setRot = (tt, to, dur) => { const r0 = rotAt(tt); rotFrom = r0; rotTo = r0 + wrapA(to - r0); rotT0 = tt; rotDur = dur; };
-  let pose = { name: I.pose || 'idle', t0: -99 }, prevPose = { name: I.pose || 'idle', t0: -99 }, expr = I.expr || 'neutral';
+  let pose = { name: I.pose || 'idle', t0: -99 }, prevPose = { name: I.pose || 'idle', t0: -99 }, expr = I.expr || 'neutral', exprT0 = -99;
   for (const e of A.ev) {
     if (e.t > t) break;
     const g = e.arg;
@@ -219,7 +219,7 @@ function evalActor(a, t) {
       }
       case 'pose': prevPose = pose; pose = { name: g, t0: e.t }; break;
       case 'mocap': s.mocap = g ? { t0: e.t, ...(typeof g === 'string' ? { clip: g } : g) } : null; break;
-      case 'expr': expr = g; break;
+      case 'expr': expr = g; exprT0 = e.t; break;
       case 'hold': Object.assign(s.hold, g); break;
       case 'shades': if (g && !s.shades) s.shadesT = e.t; s.shades = !!g; break;
       case 'apron': s.apron = !!g; break;
@@ -241,7 +241,7 @@ function evalActor(a, t) {
   if (s.infectT != null) s.infected = +((s.infectFrom||0) + clamp((t - s.infectT) / s.infectDur) * (s.infectTo - (s.infectFrom||0))).toFixed(2);
   const kb = smooth(clamp((t - pose.t0) / .25));
   { const tp = s.stopT != null ? Math.min(t, s.stopT) : t; s.pose = blendPose(clipPose(prevPose.name, tp - prevPose.t0, tp), clipPose(pose.name, tp - pose.t0, tp), kb); }
-  s.poseName = pose.name; s.poseT0 = pose.t0; s.prevPoseName = prevPose.name; s.prevPoseT0 = prevPose.t0; s.expr = expr;
+  s.poseName = pose.name; s.poseT0 = pose.t0; s.prevPoseName = prevPose.name; s.prevPoseT0 = prevPose.t0; s.expr = expr; s.exprT0 = exprT0;
   a._t = t; a._s = s; return s;
 }
 const headPos = (a, t) => { const s = evalActor(a, t); const k = a.ch.o.scale?.[1] || 1; return V([s.pos[0], s.pos[1] + 4.7 * k + (s.pose.y || 0), s.pos[2]]); };
@@ -324,6 +324,10 @@ function applyActorBase(a, t) {
   if (env > .05) { e.mouthOpen = env; if (e.mouth === 'jaw') e.mouth = 'o'; }
   const [lx] = [ly];
   e.lookX = clamp(ly * .6, -.8, .8);
+  // Two storytime faces keep moving instead of holding still.
+  { const age = s.exprT0 > -90 ? t - s.exprT0 : -1;
+    if (age >= 0 && s.expr === 'roll') { const k = Math.sin(clamp(age / 1.15) * Math.PI); e.lookY = -1.05 * k; if (k > .12) { e.eyes = 'lid'; e.browY = (e.browY || 0) + .3 * k; } }
+    else if (age >= 0 && s.expr === 'shifty') e.lookX = clamp(e.lookX + Math.sin(t * 2.6 + a.seed) * .85 * clamp(age / .5), -1, 1); }
   if (s.infected) e.infected = s.infected;
   const key = JSON.stringify(e);
   if (key !== a.faceKey) { drawFace(ch.F, e); a.faceKey = key; }

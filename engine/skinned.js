@@ -100,7 +100,12 @@ function autoClip(sk, s) {
   let key = s.walk ? (s.walk.run ? 'run' : 'walk') : pose;
   const defaults = { idle: 'Idle', stand: 'Idle', zombie: 'Idle', zombieRoar: 'Idle', walk: 'Walk', run: 'Run',
     dead: 'Death', fall: 'Death', hit: 'RecieveHit', shoot: 'Shoot_OneHanded', sit: 'SitDown',
-    clap: 'Victory', cheer: 'Victory', punch: 'Punch', attack: 'Punch' };
+    clap: 'Victory', cheer: 'Victory', punch: 'Punch', attack: 'Punch',
+    // storytime: narration rides on Idle (the speech gestures carry it), reactions get their own clip
+    stTell: 'Idle', stChop: 'Idle', stFrame: 'Idle', stQuotes: 'Idle', stWhisper: 'Idle', stNoNo: 'Idle',
+    stNod: 'Idle', stRoll: 'Idle', stCount: 'Idle', stLeanBack: 'Idle', stStare: 'Idle', stAwkward: 'Idle',
+    stWipe: 'Idle', stCringe: 'Idle', stPointCam: 'Punch', stRage: 'SwordSlash', stDoubleTake: 'RecieveHit',
+    stGasp: 'RecieveHit', stShimmy: 'Victory', stDespair: 'Defeat' };
   return map[key] || defaults[key] || sk.options.defaultAnimation || 'Idle';
 }
 
